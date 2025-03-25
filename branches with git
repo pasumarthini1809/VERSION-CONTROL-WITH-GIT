@@ -1,0 +1,60 @@
+import os
+import subprocess
+
+
+repo_name = "version_control_with_git"
+os.makedirs(repo_name, exist_ok=True)
+os.chdir(repo_name)
+
+
+subprocess.run(["git", "init"], check=True)
+subprocess.run(["git", "config", "user.name", "Test User"], check=True)
+subprocess.run(["git", "config", "user.email", "testuser@example.com"], check=True)
+
+
+with open("main.py", "w") as f:
+    f.write("# Initial Python file\nprint('Hello, Git!')\n")
+subprocess.run(["git", "add", "main.py"], check=True)
+subprocess.run(["git", "commit", "-m", "Initial commit"], check=True)
+
+
+with open("utils.py", "w") as f:
+    f.write("# Utility functions\ndef greet():\n    return 'Hello from utils!'\n")
+subprocess.run(["git", "add", "utils.py"], check=True)
+subprocess.run(["git", "commit", "-m", "Add utility functions"], check=True)
+
+
+subprocess.run(["git", "branch", "feature-branch"], check=True)
+subprocess.run(["git", "branch", "bugfix-branch"], check=True)
+
+
+subprocess.run(["git", "checkout", "feature-branch"], check=True)
+with open("main.py", "w") as f:
+    f.write("# Modified in feature-branch\nprint('Hello from feature-branch!')\n")
+subprocess.run(["git", "add", "main.py"], check=True)
+subprocess.run(["git", "commit", "-m", "Modify main.py in feature-branch"], check=True)
+
+
+subprocess.run(["git", "checkout", "bugfix-branch"], check=True)  
+with open("main.py", "w") as f:
+    f.write("# Modified in bugfix-branch\nprint('Hello from bugfix-branch!')\n")
+subprocess.run(["git", "add", "main.py"], check=True)
+subprocess.run(["git", "commit", "-m", "Modify main.py in bugfix-branch"], check=True)
+
+
+subprocess.run(["git", "checkout", "bugfix-branch"], check=True)  
+merge_result = subprocess.run(["git", "merge", "feature-branch"], capture_output=True)
+
+if merge_result.returncode != 0:
+    print("Merge conflict occurred!")
+    
+   
+  with open("main.py", "w") as f:
+        f.write("""# Merge conflict resolved
+print('Hello from both branches!')
+""")
+    
+  subprocess.run(["git", "add", "main.py"], check=True)
+  subprocess.run(["git", "commit", "-m", "Resolve merge conflict"], check=True)
+
+print("Merged version from both branches successfully.")
