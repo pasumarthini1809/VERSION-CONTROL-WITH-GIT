@@ -1,0 +1,100 @@
+pipeline {
+    agent any
+    environment {
+        NODE_ENV = 'production'
+        DEPLOY_ENV = ''
+    }
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+    stages {
+        stage('Build') {
+            steps {
+                cacheableCmd 'npm ci --prefer-offline'  
+                sh 'npm run build'
+                stash name: 'build', includes: 'dist/**/*'
+            }
+        }
+        stage('Test') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        sh 'npm test'
+                        junit 'test-results/**/*.xml'  
+                    }
+                }
+                stage('Lint') {
+                    steps {
+                        sh 'npm run lint'
+                    }
+                }
+            }
+        }
+        stage('Deploy Staging') {
+            environment {
+                DEPLOY_ENV = 'staging'
+            }
+            steps {
+                script {
+                    withCredentials([sshUserPrivateKey(
+                        credentialsId: 'staging-ssh',
+                        keyFileVariable: 'SSH_KEY'
+                    )]) {
+                        unstash 'build'
+                        sh '''
+                            chmod +x deploy-staging.sh
+                            ./deploy-staging.sh
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Acceptance Tests') {
+            steps {
+                sh 'npm run acceptance-tests'
+                archiveArtifacts artifacts: 'cypress/screenshots/**/*.png', allowEmptyArchive: true
+            }
+        }
+        stage('Production Approval') {
+            steps {
+                timeout(time: 2, unit: 'HOURS') {
+                    input message: 'Deploy to production?', ok: 'Confirm'
+                }
+            }
+        }
+        stage('Deploy Production') {
+            environment {
+                DEPLOY_ENV = 'production'
+            }
+            steps {
+                script {
+                    withCredentials([sshUserPrivateKey(
+                        credentialsId: 'prod-ssh',
+                        keyFileVariable: 'SSH_KEY'
+                    )]) {
+                        unstash 'build'
+                        sh '''
+                            chmod +x deploy-production.sh
+                            ./deploy-production.sh
+                        '''
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            cleanWs()  
+            script {
+                currentBuild.description = "Deployed to ${DEPLOY_ENV}"
+            }
+        }
+        success {
+            slackSend color: 'good', message: "Build ${currentBuild.result}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+        }
+        failure {
+            slackSend color: 'danger', message: "Build ${currentBuild.result}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+        }
+    }
+}
